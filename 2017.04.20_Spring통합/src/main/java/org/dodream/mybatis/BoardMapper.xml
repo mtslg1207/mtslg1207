@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.dodream.mybatis.BbsDAO"> <!--이 sql 문장과 매핑될 인터페이스(메소드가 없고 헤더만 있는 것)의 완전한 경로-->
+
+    <insert id="insert" parameterType="org.dodream.mybatis.BbsVO">
+    <selectKey keyProperty="num" resultType="int" order="BEFORE">
+    	select SEQ_BOARD_NUM.nextval FROM DUAL
+  	</selectKey>
+        insert into board  <!--사용자가 만든 클래스를 사용할 경우에만 파라미터 선언-->
+        	values (#{num}, #{title}, #{contents}, #{author}, sysdate, #{ref})
+    </insert>
+	
+	<insert id="upload" parameterType="org.dodream.mybatis.FileVO">
+	<selectKey keyProperty="num" order="BEFORE" resultType="int">
+		SELECT MAX(num) FROM board WHERE author=#{author}
+	</selectKey>
+		INSERT INTO upload
+			VALUES(#{num},#{originName},#{saveName},#{author})
+	</insert>
+    
+    <select id="read" resultType="org.dodream.mybatis.BbsVO">
+        select * from board where num=#{num}
+    </select>
+	
+	<select id="readFile" resultType="org.dodream.mybatis.FileVO">
+		SELECT * FROM upload WHERE num = #{num}
+	</select>
+	
+	<select id="recent" resultType="org.dodream.mybatis.BbsVO">
+		select * from board where num = 
+		(
+			SELECT max(num) FROM 
+			(
+				select * from board where author=#{author}
+			)
+		)
+	</select>
+	
+	<select id="recentFile" resultType="org.dodream.mybatis.FileVO">
+		select * from upload where num = 
+		(
+			SELECT max(num) FROM 
+			(
+				select * from upload where author=#{author}
+			)
+		)
+	</select>
+	
+    <update id="update" parameterType="org.dodream.mybatis.BbsVO" >
+        update board set contents=#{contents}, title=#{title} where num=#{num} and author=#{author}
+    </update>
+    
+    <delete id="delete">
+        delete from board where num=#{num} and not exists 
+        (
+        	select num from board where ref=#{num}
+       	)
+    </delete>
+	
+	<select id="listPage" parameterType="int" resultMap="BbsMap">
+    	SELECT NUM,TITLE,CONTENTS,AUTHOR,TTCNT,PAGE,TOTALPAGE FROM 
+    	(
+    		SELECT T1.*, FLOOR((ROWNUM-1)/5+1) PAGE, CEIL(COUNT(*) OVER()/5) TOTALPAGE, count(*)over() as TTCNT FROM 
+    		(
+    			SELECT NUM, LPAD('└',(LEVEL-1)*2,'　')||TITLE TITLE, AUTHOR, CONTENTS FROM BOARD 
+    			START WITH REF=0  
+    			CONNECT BY PRIOR NUM=REF 
+    		) T1 
+    	) 
+    	WHERE PAGE=#{page}
+    </select>
+    
+    <resultMap id="BbsMap" type="org.dodream.mybatis.Bbs">
+        <result property="page" column="page"/>
+        <result property="totalPages" column="totalpage"/>
+        
+        <association property="pageBean" column="page" javaType="org.dodream.mybatis.PageUtilBean">
+            <result property="currPage" column="page"/>
+            <result property="rows" column="ttcnt"/>
+            <result property="totalPages" column="totalpage"/>
+        </association>
+
+        <collection property="list" column="Bbsno" javaType="ArrayList" ofType="org.dodream.mybatis.BbsVO">
+            <id property="num" column="num"/>
+            <result property="title" column="title"/>
+            <result property="author" column="author"/>
+            <result property="contents" column="contents"/>
+        </collection> 
+    </resultMap>
+    
+    <select id="search" resultType="org.dodream.mybatis.BbsVO">
+	     SELECT * FROM board where
+	     <if test="category=='title'">
+	     	title like '%'||#{keyword}||'%'
+	     </if>
+	     <if test="category=='author'">
+	     	author like '%'||#{keyword}||'%'
+	     </if>
+	     <if test="category=='contents'">
+	     	contents like '%'||#{keyword}||'%'
+	     </if>  
+	</select>
+    
+</mapper>
